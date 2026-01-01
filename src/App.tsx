@@ -6,7 +6,7 @@ import { CustomerManagement } from './components/CustomerManagement';
 import { Profile } from './components/Profile';
 import { AIConversation } from './components/AIConversation';
 import { VoiceRecordingOverlay } from './components/VoiceRecordingOverlay';
-import { Receipt, Package, Users, User, Plus, Mic } from 'lucide-react';
+import { Receipt, Package, Users, User, Sparkles } from 'lucide-react';
 import { toast, Toaster } from 'sonner@2.0.3';
 
 type Page = 'receipts' | 'create-receipt' | 'products' | 'customers' | 'profile' | 'ai-conversation';
@@ -15,15 +15,17 @@ export default function App() {
   const [currentPage, setCurrentPage] = useState<Page>('receipts');
   const [isVoiceRecording, setIsVoiceRecording] = useState(false);
   const [isAIProcessing, setIsAIProcessing] = useState(false);
+  const [isVoiceMode, setIsVoiceMode] = useState(false);
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isLongPressRef = useRef(false);
 
   const handleCreateButtonPress = () => {
     isLongPressRef.current = false;
     longPressTimerRef.current = setTimeout(() => {
-      // 长按触发
+      // 长按触发语音录音
       isLongPressRef.current = true;
       setIsVoiceRecording(true);
+      setIsVoiceMode(true);
       // 震动反馈（如果设备支持）
       if (navigator.vibrate) {
         navigator.vibrate(50);
@@ -37,7 +39,7 @@ export default function App() {
     }
 
     if (isLongPressRef.current) {
-      // 长按松开：进入AI处理状态
+      // 长按松开：进入AI处理状态（语音模式）
       setIsVoiceRecording(false);
       setIsAIProcessing(true);
       
@@ -49,8 +51,9 @@ export default function App() {
         setCurrentPage('ai-conversation');
       }, 1500);
     } else {
-      // 单击：进入手动创建
-      setCurrentPage('create-receipt');
+      // 单击：直接进入AI开票页面（非语音模式）
+      setIsVoiceMode(false);
+      setCurrentPage('ai-conversation');
     }
 
     isLongPressRef.current = false;
@@ -78,7 +81,14 @@ export default function App() {
       case 'create-receipt':
         return <CreateReceipt onBack={() => setCurrentPage('receipts')} />;
       case 'ai-conversation':
-        return <AIConversation onBack={() => setCurrentPage('receipts')} onConfirm={handleAIConfirm} />;
+        return (
+          <AIConversation 
+            onBack={() => setCurrentPage('receipts')} 
+            onConfirm={handleAIConfirm}
+            isVoiceMode={isVoiceMode}
+            onManualCreate={() => setCurrentPage('create-receipt')}
+          />
+        );
       case 'products':
         return <ProductManagement />;
       case 'customers':
@@ -164,7 +174,7 @@ export default function App() {
                   boxShadow: '0 10px 25px -5px rgba(59, 130, 246, 0.5), 0 8px 10px -6px rgba(59, 130, 246, 0.4)',
                 }}
               >
-                <Plus className="w-8 h-8" />
+                <Sparkles className="w-7 h-7" />
               </button>
             </div>
 

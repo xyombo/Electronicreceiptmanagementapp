@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { ArrowLeft, Check, Loader2, Mic, Send, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Check, Loader2, Mic, Send, MessageSquare, Edit3 } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface ReceiptData {
@@ -25,9 +25,11 @@ interface AIConversationProps {
   onBack: () => void;
   onConfirm: (data: ReceiptData) => void;
   initialTranscript?: string;
+  isVoiceMode: boolean;
+  onManualCreate: () => void;
 }
 
-export function AIConversation({ onBack, onConfirm, initialTranscript = '' }: AIConversationProps) {
+export function AIConversation({ onBack, onConfirm, initialTranscript = '', isVoiceMode, onManualCreate }: AIConversationProps) {
   const [isProcessing, setIsProcessing] = useState(true);
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [userInput, setUserInput] = useState('');
@@ -36,34 +38,46 @@ export function AIConversation({ onBack, onConfirm, initialTranscript = '' }: AI
   const [inputMode, setInputMode] = useState<'text' | 'voice'>('text');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 模拟AI解析初始语音
+  // 模拟AI解析初始语音或显示欢迎消息
   useState(() => {
-    setTimeout(() => {
-      const mockData: ReceiptData = {
-        customerName: '张三便利店',
-        items: [
-          { productName: '可口可乐', quantity: 10, unitPrice: 3.5, amount: 35 },
-          { productName: '农夫山泉', quantity: 20, unitPrice: 2, amount: 40 },
-        ],
-        logistics: '顺丰速运',
-        totalAmount: 75,
-        date: '2026-01-01',
-      };
+    if (isVoiceMode) {
+      // 语音模式：解析语音内容
+      setTimeout(() => {
+        const mockData: ReceiptData = {
+          customerName: '张三便利店',
+          items: [
+            { productName: '可口可乐', quantity: 10, unitPrice: 3.5, amount: 35 },
+            { productName: '农夫山泉', quantity: 20, unitPrice: 2, amount: 40 },
+          ],
+          logistics: '顺丰速运',
+          totalAmount: 75,
+          date: '2026-01-01',
+        };
 
+        setMessages([
+          {
+            type: 'user',
+            content: initialTranscript || '给张三便利店开票，10箱可口可乐，20箱农夫山泉，用顺丰发货',
+          },
+          {
+            type: 'ai',
+            content: '好的，我已经为您整理好开票信息，请确认：',
+            receiptData: mockData,
+          },
+        ]);
+        setCurrentReceiptData(mockData);
+        setIsProcessing(false);
+      }, 1500);
+    } else {
+      // 文字模式：显示欢迎消息
       setMessages([
         {
-          type: 'user',
-          content: initialTranscript || '给张三便利店开票，10箱可口可乐，20箱农夫山泉，用顺丰发货',
-        },
-        {
           type: 'ai',
-          content: '好的，我已经为您整理好开票信息，请确认：',
-          receiptData: mockData,
+          content: '您好！我是 AI 开票助手 ✨\n\n我可以帮您快速开具电子收据。您可以：\n• 直接告诉我客户名称、商品信息和物流方式\n• 随时修改票据内容\n• 语音输入或文字输入都可以\n\n试试说："给李四超市开10箱可乐，单价3块，用顺丰发货"',
         },
       ]);
-      setCurrentReceiptData(mockData);
       setIsProcessing(false);
-    }, 1500);
+    }
   });
 
   const handleSendMessage = () => {
@@ -75,22 +89,47 @@ export function AIConversation({ onBack, onConfirm, initialTranscript = '' }: AI
     };
 
     setMessages(prev => [...prev, newMessage]);
+    const currentInput = userInput;
     setUserInput('');
     setIsProcessing(true);
 
     // 模拟AI响应
     setTimeout(() => {
-      // 根据用户输入更新票据数据
-      let updatedData = { ...currentReceiptData! };
+      // 如果还没有票据数据，说明是首次输入，需要创建新票据
+      if (!currentReceiptData) {
+        const mockData: ReceiptData = {
+          customerName: '李四超市',
+          items: [
+            { productName: '可口可乐', quantity: 10, unitPrice: 3, amount: 30 },
+          ],
+          logistics: '顺丰速运',
+          totalAmount: 30,
+          date: '2026-01-01',
+        };
 
-      if (userInput.includes('改成') || userInput.includes('修改')) {
-        if (userInput.includes('可乐') && userInput.match(/(\d+)/)) {
-          const quantity = parseInt(userInput.match(/(\d+)/)![1]);
+        const aiResponse: ConversationMessage = {
+          type: 'ai',
+          content: '好的，我已经为您整理好开票信息，请确认：',
+          receiptData: mockData,
+        };
+
+        setMessages(prev => [...prev, aiResponse]);
+        setCurrentReceiptData(mockData);
+        setIsProcessing(false);
+        return;
+      }
+
+      // 已有票据数据，根据用户输入更新
+      let updatedData = { ...currentReceiptData };
+
+      if (currentInput.includes('改成') || currentInput.includes('修改')) {
+        if (currentInput.includes('可乐') && currentInput.match(/(\d+)/)) {
+          const quantity = parseInt(currentInput.match(/(\d+)/)![1]);
           updatedData.items[0].quantity = quantity;
           updatedData.items[0].amount = quantity * updatedData.items[0].unitPrice;
         }
-        if (userInput.includes('客户') || userInput.includes('店')) {
-          const nameMatch = userInput.match(/['""]([^'""]+)['""]|改成(.+店)/);
+        if (currentInput.includes('客户') || currentInput.includes('店')) {
+          const nameMatch = currentInput.match(/['""]([^'""]+)['""]|改成(.+店)/);
           if (nameMatch) {
             updatedData.customerName = nameMatch[1] || nameMatch[2];
           }
@@ -236,85 +275,99 @@ export function AIConversation({ onBack, onConfirm, initialTranscript = '' }: AI
       </div>
 
       {/* 底部IM聊天输入框 */}
-      <div className="bg-white border-t border-gray-200 px-4 py-3 safe-area-bottom">
-        <div className="flex items-end gap-2">
-          {/* 文字/语音模式切换按钮 */}
+      <div className="bg-white border-t border-gray-200 px-4 safe-area-bottom">
+        {/* 手动开票链接 */}
+        <div className="py-3 flex items-center justify-center border-b border-gray-100">
           <button
-            onClick={() => setInputMode(inputMode === 'text' ? 'voice' : 'text')}
-            className={`p-2.5 rounded-full transition-all active:scale-95 ${
-              inputMode === 'voice' 
-                ? 'bg-blue-100 text-blue-600' 
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
+            onClick={onManualCreate}
+            className="flex items-center gap-1.5 text-sm text-blue-600 active:scale-95 transition-transform"
           >
-            {inputMode === 'text' ? (
-              <Mic className="w-5 h-5" />
-            ) : (
-              <MessageSquare className="w-5 h-5" />
-            )}
+            <Edit3 className="w-4 h-4" />
+            <span>切换到手动开票</span>
           </button>
-
-          {/* 输入框 - 根据模式显示不同内容 */}
-          {inputMode === 'text' ? (
-            <div className="flex-1 relative">
-              <textarea
-                value={userInput}
-                onChange={(e) => setUserInput(e.target.value)}
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSendMessage();
-                  }
-                }}
-                placeholder="说点什么..."
-                disabled={isProcessing}
-                rows={1}
-                className="w-full px-4 py-2.5 bg-gray-100 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 resize-none max-h-24"
-                style={{ minHeight: '44px' }}
-              />
-            </div>
-          ) : (
-            <button
-              onMouseDown={handleVoicePress}
-              onMouseUp={handleVoiceRelease}
-              onMouseLeave={() => isVoiceRecording && handleVoiceRelease()}
-              onTouchStart={handleVoicePress}
-              onTouchEnd={handleVoiceRelease}
-              className={`flex-1 rounded-full py-2.5 transition-all ${
-                isVoiceRecording
-                  ? 'bg-red-500 text-white'
-                  : 'bg-gray-100 text-gray-700'
-              }`}
-            >
-              {isVoiceRecording ? '松开发送' : '按住说话'}
-            </button>
-          )}
-
-          {/* 发送按钮 - 仅在文字模式且有内容时显示 */}
-          {inputMode === 'text' && userInput.trim() && (
-            <button
-              onClick={handleSendMessage}
-              disabled={isProcessing}
-              className="p-2.5 bg-blue-600 text-white rounded-full active:scale-95 transition-all disabled:opacity-50 shadow-md"
-            >
-              <Send className="w-5 h-5" />
-            </button>
-          )}
         </div>
 
-        {/* 语音录音提示 */}
-        {isVoiceRecording && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mt-2 text-center"
-          >
-            <p className="text-sm text-red-600 flex items-center justify-center gap-2">
-              <span className="w-2 h-2 bg-red-600 rounded-full animate-pulse"></span>
-              正在录音，松开发送
-            </p>
-          </motion.div>
-        )}
+        {/* 输入区域 */}
+        <div className="py-3">
+          <div className="flex items-end gap-2">
+            {/* 文字/语音模式切换按钮 */}
+            <button
+              onClick={() => setInputMode(inputMode === 'text' ? 'voice' : 'text')}
+              className={`p-2.5 rounded-full transition-all active:scale-95 ${
+                inputMode === 'voice' 
+                  ? 'bg-blue-100 text-blue-600' 
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {inputMode === 'text' ? (
+                <Mic className="w-5 h-5" />
+              ) : (
+                <MessageSquare className="w-5 h-5" />
+              )}
+            </button>
+
+            {/* 输入框 - 根据模式显示不同内容 */}
+            {inputMode === 'text' ? (
+              <div className="flex-1 relative">
+                <textarea
+                  value={userInput}
+                  onChange={(e) => setUserInput(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage();
+                    }
+                  }}
+                  placeholder="说点什么..."
+                  disabled={isProcessing}
+                  rows={1}
+                  className="w-full px-4 py-2.5 bg-gray-100 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 resize-none max-h-24"
+                  style={{ minHeight: '44px' }}
+                />
+              </div>
+            ) : (
+              <button
+                onMouseDown={handleVoicePress}
+                onMouseUp={handleVoiceRelease}
+                onMouseLeave={() => isVoiceRecording && handleVoiceRelease()}
+                onTouchStart={handleVoicePress}
+                onTouchEnd={handleVoiceRelease}
+                className={`flex-1 rounded-full py-2.5 transition-all ${
+                  isVoiceRecording
+                    ? 'bg-red-500 text-white'
+                    : 'bg-gray-100 text-gray-700'
+                }`}
+              >
+                {isVoiceRecording ? '松开发送' : '按住说话'}
+              </button>
+            )}
+
+            {/* 发送按钮 - 仅在文字模式且有内容时显示 */}
+            {inputMode === 'text' && userInput.trim() && (
+              <button
+                onClick={handleSendMessage}
+                disabled={isProcessing}
+                className="p-2.5 bg-blue-600 text-white rounded-full active:scale-95 transition-all disabled:opacity-50 shadow-md"
+              >
+                <Send className="w-5 h-5" />
+              </button>
+            )}
+          </div>
+
+          {/* 语音录音提示 */}
+          {isVoiceRecording && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-2 text-center"
+            >
+              <p className="text-sm text-red-600 flex items-center justify-center gap-2">
+                <span className="w-2 h-2 bg-red-600 rounded-full animate-pulse"></span>
+                正在录音，松开发送
+              </p>
+            </motion.div>
+          )}
+        </div>
       </div>
     </div>
   );
